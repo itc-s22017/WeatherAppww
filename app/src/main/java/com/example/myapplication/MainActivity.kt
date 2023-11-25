@@ -1,28 +1,23 @@
 package com.example.myapplication
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Arrangement.Absolute.Center
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -38,39 +33,74 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import coil.compose.AsyncImage
-import com.example.myapplication.api.Client
 import com.example.myapplication.api.Client.get
-import com.example.myapplication.model.Weather
-import com.example.myapplication.model.WeatherData
 import com.example.myapplication.model.WeatherResponse
 import com.example.myapplication.ui.theme.MyApplicationTheme
-import io.ktor.client.call.body
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+
 
 class MainActivity : ComponentActivity() {
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private val _loc = MutableStateFlow<Location?>(null)
+//    private val loc = _loc
+
+
+    @SuppressLint("StateFlowValueCalledInComposition")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
+                1
+            )
+        } else {
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { location: Location? ->
+                    // Got last known location. In some rare situations this can be null.
+                    _loc.value = location
+                    Log.d("Location", "${location?.longitude}")
+                    Log.d("Location", "${location?.latitude}")
+
+                }
+        }
         setContent {
             MyApplicationTheme {
-                Main()
+                Main(location = _loc.value)
             }
         }
+
+
     }
+
+
 }
+
 
 @SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Main(modifier: Modifier = Modifier) {
+fun Main(modifier: Modifier = Modifier, location: Location? = null) {
     var expanded by remember { mutableStateOf(false) }
     val items = mapOf(2130037 to "北海道", 2130658 to "青森", 2111834 to "岩手", 1856035 to "沖縄")
     var selectedItem by remember { mutableStateOf(items[2130037]) }
@@ -78,6 +108,7 @@ fun Main(modifier: Modifier = Modifier) {
         mutableIntStateOf(2130037)
     }
     var weatherResponse by remember { mutableStateOf<WeatherResponse?>(null) }
+
     val scope = rememberCoroutineScope()
     Box(
         modifier = Modifier
@@ -140,6 +171,7 @@ fun Main(modifier: Modifier = Modifier) {
                     val sdf = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm")
                     val date = java.util.Date(weatherData.dt * 1000)
                     val f = sdf.format(date)
+                    location?.toString()?.let { it1 -> Text(text = it1) }
                     Text(text = "時間: $f")
                     Text(text = "温度: ${weatherData.main.temp}")
                     Text(text = "体感気温: ${weatherData.main.feelsLike}")
