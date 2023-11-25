@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,20 +39,41 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.myapplication.api.Client.get
 import com.example.myapplication.model.WeatherResponse
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private val _loc = MutableStateFlow<Location?>(null)
-//    private val loc = _loc
+    private var _loc by mutableStateOf<Location?>(null)
+    private lateinit var locationRequest: LocationRequest
+    private lateinit var locationCallback: LocationCallback
+
+    private val locationPermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val isGrantedFineLocation =
+            permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
+        val isGrantedCoarseLocation =
+            permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
+
+        // どちらかの権限は許可貰えたという場合
+        if (isGrantedFineLocation || isGrantedCoarseLocation) {
+            requestLocationUpdates()
+            return@registerForActivityResult
+        }
+    }
 
 
     @SuppressLint("StateFlowValueCalledInComposition")
@@ -58,51 +81,75 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ),
-                1
-            )
-        } else {
-            fusedLocationClient.lastLocation
-                .addOnSuccessListener { location: Location? ->
-                    // Got last known location. In some rare situations this can be null.
-                    _loc.value = location
-                    Log.d("Location", "${location?.longitude}")
-                    Log.d("Location", "${location?.latitude}")
+        // 位置情報取得関連↓
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        locationRequest = LocationRequest.Builder(
+            Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5000
+        ).build()
 
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.also { location ->
+                    // 緯度経度とる
+                    _loc = location
                 }
-        }
-        setContent {
-            MyApplicationTheme {
-                Main(location = _loc.value)
             }
         }
 
+        setContent {
+            MyApplicationTheme {
+                Main(location = _loc)
+            }
+        }
+    }
 
+
+    private fun requestLocationUpdates() {
+        val isGrantedFineLocation = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val isGrantedCoarseLocation = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        // 位置情報取得の権限のうち、どちらか一方でもあればOKなので位置情報取得開始
+        if (isGrantedFineLocation || isGrantedCoarseLocation) {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                mainLooper
+            )
+            return
+        }
+        locationPermissionRequest.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        requestLocationUpdates()
+    }
+
+    override fun onPause() {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+
+        super.onPause()
     }
 
 
 }
 
-
 @SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Main(modifier: Modifier = Modifier, location: Location? = null) {
+fun Main(modifier: Modifier = Modifier,location:Location?) {
     var expanded by remember { mutableStateOf(false) }
-    val items = mapOf(2130037 to "北海道", 2130658 to "青森", 2111834 to "岩手", 1856035 to "沖縄")
+    val items =
+        mapOf(2130037 to "北海道", 2130658 to "青森", 2111834 to "岩手", 1856035 to "沖縄")
     var selectedItem by remember { mutableStateOf(items[2130037]) }
     var cityId by remember {
         mutableIntStateOf(2130037)
@@ -120,6 +167,12 @@ fun Main(modifier: Modifier = Modifier, location: Location? = null) {
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            Text(
+                text = location?.longitude.toString(),
+                modifier = Modifier.clickable {
+                    Log.d("LOC", "${location}")
+                }
+            )
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = {
@@ -171,7 +224,6 @@ fun Main(modifier: Modifier = Modifier, location: Location? = null) {
                     val sdf = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm")
                     val date = java.util.Date(weatherData.dt * 1000)
                     val f = sdf.format(date)
-                    location?.toString()?.let { it1 -> Text(text = it1) }
                     Text(text = "時間: $f")
                     Text(text = "温度: ${weatherData.main.temp}")
                     Text(text = "体感気温: ${weatherData.main.feelsLike}")
@@ -211,6 +263,6 @@ fun Main(modifier: Modifier = Modifier, location: Location? = null) {
 @Composable
 fun GreetingPreview() {
     MyApplicationTheme {
-        Main()
+//        Main()
     }
 }
