@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -42,6 +44,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.myapplication.api.Client.get
+import com.example.myapplication.model.WeatherData
 import com.example.myapplication.model.WeatherResponse
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -146,15 +149,16 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Main(modifier: Modifier = Modifier,location:Location?) {
+fun Main(modifier: Modifier = Modifier, location: Location?) {
     var expanded by remember { mutableStateOf(false) }
-    val items =
-        mapOf(2130037 to "北海道", 2130658 to "青森", 2111834 to "岩手", 1856035 to "沖縄")
+    val items = mapOf(2130037 to "北海道", 2130658 to "青森", 2111834 to "岩手", 1856035 to "沖縄")
     var selectedItem by remember { mutableStateOf(items[2130037]) }
     var cityId by remember {
         mutableIntStateOf(2130037)
     }
     var weatherResponse by remember { mutableStateOf<WeatherResponse?>(null) }
+    val fiveWeatherData: List<List<WeatherData>> = weatherResponse?.list?.chunked(5) ?: listOf()
+
 
     val scope = rememberCoroutineScope()
     Box(
@@ -218,39 +222,42 @@ fun Main(modifier: Modifier = Modifier,location:Location?) {
                 Text("Click me")
             }
             weatherResponse?.let {
-                Text(text = "都市名: ${selectedItem}")
+                Text(text = "都市名: $selectedItem")
                 Spacer(modifier = Modifier.padding(bottom = 20.dp))
+
                 it.list.forEach { weatherData ->
                     val sdf = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm")
                     val date = java.util.Date(weatherData.dt * 1000)
                     val f = sdf.format(date)
-                    Text(text = "時間: $f")
-                    Text(text = "温度: ${weatherData.main.temp}")
-                    Text(text = "体感気温: ${weatherData.main.feelsLike}")
-                    Text(text = "陸上気圧: ${weatherData.main.pressure}")
-                    Text(text = "湿度: ${weatherData.main.humidity}")
-                    Text(text = "天気: ${weatherData.weather.firstOrNull()?.description}")
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = "Icon")
-                        AsyncImage(
-                            model = "https://openweathermap.org/img/wn/${weatherData.weather.firstOrNull()?.icon}@2x.png",
-                            contentDescription = null
-                        )
-                    }
 
-                    Text(text = "風速: ${weatherData.wind.speed}")
-                    Text(text = "風向: ${weatherData.wind.deg}")
-                    Text(text = "瞬間風速: ${weatherData.wind.gust}")
-                    Text(text = "降水確率: ${weatherData.pop * 100}%")
-                    if (weatherData.snow?.snowVolume != null) {
-                        Text(text = "積雪量: ${weatherData.snow.snowVolume}mm")
+                    Column(modifier = Modifier
+                        .background(Color.LightGray)
+                        .padding(2.dp)) {
+                        Text(text = "予測時刻: $f")
+                        Text(text = "温度: ${weatherData.main.temp}")
+                        Text(text = "体感気温: ${weatherData.main.feelsLike}")
+                        Text(text = "陸上気圧: ${weatherData.main.pressure}")
+                        Text(text = "湿度: ${weatherData.main.humidity}")
+                        Text(text = "天気: ${weatherData.weather.firstOrNull()?.description}")
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "Icon")
+                            AsyncImage(
+                                model = "https://openweathermap.org/img/wn/${weatherData.weather.firstOrNull()?.icon}@2x.png",
+                                contentDescription = null
+                            )
+                        }
+                        Text(text = "風速: ${weatherData.wind.speed}")
+                        Text(text = "風向: ${weatherData.wind.deg}")
+                        Text(text = "瞬間風速: ${weatherData.wind.gust}")
+                        Text(text = "降水確率: ${weatherData.pop * 100}%")
+                        if (weatherData.snow?.snowVolume != null) {
+                            Text(text = "積雪量: ${weatherData.snow.snowVolume}mm")
 
+                        }
                     }
-                    Text(text = "予測時刻: ${weatherData.dateTime}")
-                    Text(text = "-------------------------------------")
                     Spacer(modifier = Modifier.padding(4.dp))
                 }
             }
