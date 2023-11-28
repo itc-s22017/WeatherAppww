@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,11 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.myapplication.api.Client.get
-import com.example.myapplication.model.WeatherData
+import com.example.myapplication.api.Client.getFromLocation
 import com.example.myapplication.model.WeatherResponse
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -53,7 +53,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 
@@ -149,16 +148,15 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Main(modifier: Modifier = Modifier, location: Location?) {
+fun Main(location: Location?) {
     var expanded by remember { mutableStateOf(false) }
-    val items = mapOf(2130037 to "北海道", 2130658 to "青森", 2111834 to "岩手", 1856035 to "沖縄")
+    val items = Prefecture.items
     var selectedItem by remember { mutableStateOf(items[2130037]) }
+    var selectedItemClone by remember { mutableStateOf(selectedItem) }
     var cityId by remember {
         mutableIntStateOf(2130037)
     }
     var weatherResponse by remember { mutableStateOf<WeatherResponse?>(null) }
-    val fiveWeatherData: List<List<WeatherData>> = weatherResponse?.list?.chunked(5) ?: listOf()
-
 
     val scope = rememberCoroutineScope()
     Box(
@@ -171,12 +169,7 @@ fun Main(modifier: Modifier = Modifier, location: Location?) {
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                text = location?.longitude.toString(),
-                modifier = Modifier.clickable {
-                    Log.d("LOC", "${location}")
-                }
-            )
+
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = {
@@ -198,11 +191,13 @@ fun Main(modifier: Modifier = Modifier, location: Location?) {
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
-                    items.forEach { (key, value) ->
+
+                    items.forEach { (key, _) ->
                         DropdownMenuItem(
                             text = { Text(text = items[key].toString()) },
                             onClick = {
                                 selectedItem = items[key]
+                                selectedItemClone = items[key]
                                 expanded = false
                                 cityId = key
                             }
@@ -210,19 +205,40 @@ fun Main(modifier: Modifier = Modifier, location: Location?) {
                     }
                 }
             }
-            Button(
-                onClick = {
-                    scope.launch {
-                        weatherResponse = get(cityId)
-                    }
-                },
+
+
+            Row(
                 modifier = Modifier
-                    .padding(top = 16.dp)
+                    .fillMaxWidth()
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Click me")
+                Button(
+                    onClick = {
+                        scope.launch {
+                            weatherResponse = get(cityId)
+                        }
+                    },
+
+                    ) {
+                    Text("Click me")
+                }
+//                Spacer(modifier = Modifier.padding(horizontal = 16.dp))
+                Button(
+                    onClick = {
+                        scope.launch {
+                            weatherResponse =
+                                getFromLocation(location?.latitude, location?.longitude)
+                            selectedItemClone = "現在地（どこかわかりまへん）"
+                        }
+                    },
+                ) {
+                    Text("現在地から")
+                }
             }
+
             weatherResponse?.let {
-                Text(text = "都市名: $selectedItem")
+                Text(text = "都市名: $selectedItemClone")
                 Spacer(modifier = Modifier.padding(bottom = 20.dp))
 
                 it.list.forEach { weatherData ->
@@ -230,14 +246,16 @@ fun Main(modifier: Modifier = Modifier, location: Location?) {
                     val date = java.util.Date(weatherData.dt * 1000)
                     val f = sdf.format(date)
 
-                    Column(modifier = Modifier
-                        .background(Color.LightGray)
-                        .padding(2.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .background(Color.LightGray)
+                            .padding(2.dp)
+                    ) {
                         Text(text = "予測時刻: $f")
-                        Text(text = "温度: ${weatherData.main.temp}")
-                        Text(text = "体感気温: ${weatherData.main.feelsLike}")
-                        Text(text = "陸上気圧: ${weatherData.main.pressure}")
-                        Text(text = "湿度: ${weatherData.main.humidity}")
+                        Text(text = "温度: ${weatherData.main.temp}℃")
+                        Text(text = "体感気温: ${weatherData.main.feelsLike}℃")
+                        Text(text = "陸上気圧: ${weatherData.main.pressure}Pa")
+                        Text(text = "湿度: ${weatherData.main.humidity}%")
                         Text(text = "天気: ${weatherData.weather.firstOrNull()?.description}")
                         Row(
                             modifier = Modifier.fillMaxSize(),
@@ -249,9 +267,9 @@ fun Main(modifier: Modifier = Modifier, location: Location?) {
                                 contentDescription = null
                             )
                         }
-                        Text(text = "風速: ${weatherData.wind.speed}")
+                        Text(text = "風速: ${weatherData.wind.speed}m/s")
                         Text(text = "風向: ${weatherData.wind.deg}")
-                        Text(text = "瞬間風速: ${weatherData.wind.gust}")
+                        Text(text = "瞬間風速: ${weatherData.wind.gust}kt")
                         Text(text = "降水確率: ${weatherData.pop * 100}%")
                         if (weatherData.snow?.snowVolume != null) {
                             Text(text = "積雪量: ${weatherData.snow.snowVolume}mm")

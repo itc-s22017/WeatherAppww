@@ -38,4 +38,9 @@ object Client {
             .body()
     }
 
+    suspend fun getFromLocation(lat: Double?, longi: Double?): WeatherResponse {
+        return ktor.get { url("https://api.openweathermap.org/data/2.5/forecast?lat=$lat&lon=$longi&appid=${BuildConfig.API_KEY}&lang=ja&units=metric") }
+            .body()
+    }
+
 }
