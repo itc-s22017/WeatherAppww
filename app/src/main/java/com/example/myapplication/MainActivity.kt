@@ -4,13 +4,13 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.location.Location
+import android.media.Image
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.TextDelegate.Companion.paint
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -37,7 +38,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role.Companion.Image
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -78,7 +83,6 @@ class MainActivity : ComponentActivity() {
     }
 
 
-    @SuppressLint("StateFlowValueCalledInComposition")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -141,8 +145,6 @@ class MainActivity : ComponentActivity() {
 
         super.onPause()
     }
-
-
 }
 
 @SuppressLint("SimpleDateFormat")
@@ -217,6 +219,7 @@ fun Main(location: Location?) {
                     onClick = {
                         scope.launch {
                             weatherResponse = get(cityId)
+                            selectedItemClone = selectedItem
                         }
                     },
 
@@ -241,16 +244,22 @@ fun Main(location: Location?) {
                 Text(text = "都市名: $selectedItemClone")
                 Spacer(modifier = Modifier.padding(bottom = 20.dp))
 
-                it.list.forEach { weatherData ->
+                it.list.forEachIndexed { index, weatherData ->
                     val sdf = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm")
                     val date = java.util.Date(weatherData.dt * 1000)
                     val f = sdf.format(date)
 
                     Column(
                         modifier = Modifier
-                            .background(Color.LightGray)
-                            .padding(2.dp)
+                            .paint(
+                                painterResource(id = R.drawable.mm),
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.Center,
+                            )
+                            .fillMaxSize()
+                            .padding(top = 30.dp, bottom = 30.dp, start = 15.dp)
                     ) {
+                        Text(text = "${index + 1}米")
                         Text(text = "予測時刻: $f")
                         Text(text = "温度: ${weatherData.main.temp}℃")
                         Text(text = "体感気温: ${weatherData.main.feelsLike}℃")
@@ -258,13 +267,13 @@ fun Main(location: Location?) {
                         Text(text = "湿度: ${weatherData.main.humidity}%")
                         Text(text = "天気: ${weatherData.weather.firstOrNull()?.description}")
                         Row(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(text = "Icon")
                             AsyncImage(
                                 model = "https://openweathermap.org/img/wn/${weatherData.weather.firstOrNull()?.icon}@2x.png",
-                                contentDescription = null
+                                contentDescription = null,
                             )
                         }
                         Text(text = "風速: ${weatherData.wind.speed}m/s")
